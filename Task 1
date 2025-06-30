@@ -1,0 +1,101 @@
+Task 1: Joins Practice
+Sample Database Setup
+First, let's create sample tables to demonstrate joins:
+sql-- Create sample tables
+
+CREATE TABLE employees (
+    emp_id INT PRIMARY KEY,
+    emp_name VARCHAR(100),
+    department_id INT,
+    salary DECIMAL(10,2)
+);
+
+CREATE TABLE departments (
+    dept_id INT PRIMARY KEY,
+    dept_name VARCHAR(100),
+    location VARCHAR(100)
+);
+
+CREATE TABLE projects (
+    project_id INT PRIMARY KEY,
+    project_name VARCHAR(100),
+    emp_id INT,
+    budget DECIMAL(12,2)
+);
+
+-- Insert sample data
+INSERT INTO employees VALUES 
+(1, 'John Doe', 101, 50000.00),
+(2, 'Jane Smith', 102, 60000.00),
+(3, 'Mike Johnson', 101, 55000.00),
+(4, 'Sarah Wilson', 103, 65000.00),
+(5, 'Tom Brown', NULL, 45000.00);
+
+INSERT INTO departments VALUES 
+(101, 'IT', 'New York'),
+(102, 'HR', 'Chicago'),
+(103, 'Finance', 'Boston'),
+(104, 'Marketing', 'Seattle');
+
+INSERT INTO projects VALUES 
+(1001, 'Website Redesign', 1, 25000.00),
+(1002, 'HR System', 2, 40000.00),
+(1003, 'Budget Analysis', 4, 15000.00),
+(1004, 'Mobile App', NULL, 50000.00);
+
+
+1. INNER JOIN
+Returns records that have matching values in both tables.
+sql-- INNER JOIN: Get employees with their department information
+SELECT e.emp_name, e.salary, d.dept_name, d.location
+FROM employees e
+INNER JOIN departments d ON e.department_id = d.dept_id;
+
+-- Result: Only employees with valid department assignments
+-- John Doe, Jane Smith, Mike Johnson, Sarah Wilson (Tom Brown excluded - no dept)
+
+
+
+2. LEFT JOIN (LEFT OUTER JOIN)
+Returns all records from the left table and matching records from the right table.
+sql-- LEFT JOIN: Get all employees with their department info (including those without departments)
+SELECT e.emp_name, e.salary, d.dept_name, d.location
+FROM employees e
+LEFT JOIN departments d ON e.department_id = d.dept_id;
+
+-- Result: All employees including Tom Brown with NULL department values
+
+
+3. RIGHT JOIN (RIGHT OUTER JOIN)
+Returns all records from the right table and matching records from the left table.
+sql-- RIGHT JOIN: Get all departments with their employees (including empty departments)
+SELECT e.emp_name, e.salary, d.dept_name, d.location
+FROM employees e
+RIGHT JOIN departments d ON e.department_id = d.dept_id;
+
+-- Result: All departments including Marketing with NULL employee values
+
+
+
+4. FULL OUTER JOIN
+Returns all records when there's a match in either table.
+sql-- FULL OUTER JOIN: Get all employees and all departments
+SELECT e.emp_name, e.salary, d.dept_name, d.location
+FROM employees e
+FULL OUTER JOIN departments d ON e.department_id = d.dept_id;
+
+-- Result: All employees AND all departments, with NULLs where no match exists
+
+
+Complex Join Example
+sql-- Multiple table join with aggregation
+SELECT 
+    d.dept_name,
+    COUNT(e.emp_id) as employee_count,
+    AVG(e.salary) as avg_salary,
+    SUM(p.budget) as total_project_budget
+FROM departments d
+LEFT JOIN employees e ON d.dept_id = e.department_id
+LEFT JOIN projects p ON e.emp_id = p.emp_id
+GROUP BY d.dept_name
+ORDER BY avg_salary DESC;
