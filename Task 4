@@ -1,0 +1,146 @@
+Task 4: Database Backup and Recovery
+Backup Scripts
+PostgreSQL Backup Script
+bash#!/bin/bash
+# PostgreSQL backup script
+
+# Configuration
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_NAME="company_db"
+DB_USER="postgres"
+BACKUP_DIR="/backup/postgresql"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Full database backup
+pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+    -f "$BACKUP_DIR/full_backup_$DATE.sql" \
+    --verbose --clean --create
+
+# Compressed backup
+pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+    -Fc -f "$BACKUP_DIR/compressed_backup_$DATE.dump"
+
+# Schema-only backup
+pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+    -s -f "$BACKUP_DIR/schema_backup_$DATE.sql"
+
+# Data-only backup
+pg_dump -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+    -a -f "$BACKUP_DIR/data_backup_$DATE.sql"
+
+echo "Backup completed: $DATE"
+MySQL Backup Script
+bash#!/bin/bash
+# MySQL backup script
+
+# Configuration
+DB_HOST="localhost"
+DB_NAME="company_db"
+DB_USER="root"
+BACKUP_DIR="/backup/mysql"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Full database backup
+mysqldump -h $DB_HOST -u $DB_USER -p \
+    --single-transaction --routines --triggers \
+    $DB_NAME > "$BACKUP_DIR/full_backup_$DATE.sql"
+
+# Compressed backup
+mysqldump -h $DB_HOST -u $DB_USER -p \
+    --single-transaction --routines --triggers \
+    $DB_NAME | gzip > "$BACKUP_DIR/compressed_backup_$DATE.sql.gz"
+
+echo "MySQL backup completed: $DATE"
+Recovery Scripts
+PostgreSQL Recovery Script
+bash#!/bin/bash
+# PostgreSQL recovery script
+
+# Configuration
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_NAME="company_db"
+DB_USER="postgres"
+BACKUP_FILE="$1"
+
+if [ -z "$BACKUP_FILE" ]; then
+    echo "Usage: $0 <backup_file>"
+    exit 1
+fi
+
+# Drop existing database (CAUTION!)
+echo "WARNING: This will drop the existing database!"
+read -p "Continue? (y/N): " confirm
+if [[ $confirm == [yY] ]]; then
+    dropdb -h $DB_HOST -p $DB_PORT -U $DB_USER $DB_NAME
+    createdb -h $DB_HOST -p $DB_PORT -U $DB_USER $DB_NAME
+    
+    # Restore from backup
+    if [[ $BACKUP_FILE == *.dump ]]; then
+        # Custom format restore
+        pg_restore -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+            --verbose --clean --no-acl --no-owner $BACKUP_FILE
+    else
+        # SQL format restore
+        psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME \
+            -f $BACKUP_FILE
+    fi
+    
+    echo "Database restored successfully"
+else
+    echo "Recovery cancelled"
+fi
+Backup Verification and Testing
+sql-- Backup verification queries
+
+-- 1. Check backup file integrity
+SELECT 
+    pg_size_pretty(pg_database_size('company_db')) as current_db_size;
+
+-- 2. Verify critical table counts after restore
+SELECT 
+    'employees' as table_name,
+    COUNT(*) as record_count
+FROM employees
+UNION ALL
+SELECT 
+    'departments' as table_name,
+    COUNT(*) as record_count
+FROM departments;
+
+-- 3. Verify data integrity
+SELECT 
+    COUNT(*) as employees_with_departments,
+    COUNT(DISTINCT department_id) as unique_departments
+FROM employees 
+WHERE department_id IS NOT NULL;
+
+-- 4. Check for any corruption
+SELECT 
+    schemaname,
+    tablename,
+    attname,
+    n_distinct,
+    correlation
+FROM pg_stats
+WHERE tablename IN ('employees', 'departments')
+ORDER BY tablename, attname;
+Automated Backup Schedule
+bash#!/bin/bash
+# Add to crontab for automated backups
+
+# Daily backup at 2 AM
+# 0 2 * * * /path/to/backup_script.sh
+
+# Weekly full backup on Sunday at 1 AM
+# 0 1 * * 0 /path/to/full_backup_script.sh
+
+# Monthly cleanup - keep only last 30 days
+# 0 3 1 * * find /backup -name "*.sql" -mtime +30 -delete
