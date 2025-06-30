@@ -1,0 +1,122 @@
+Task 2: Advanced Data Analysis with Complex Queries
+
+Window Functions Examples
+sql-- 1. Ranking employees by salary within each department
+
+
+SELECT 
+    emp_name,
+    dept_name,
+    salary,
+    RANK() OVER (PARTITION BY dept_name ORDER BY salary DESC) as salary_rank,
+    ROW_NUMBER() OVER (PARTITION BY dept_name ORDER BY salary DESC) as row_num
+FROM employees e
+JOIN departments d ON e.department_id = d.dept_id;
+
+-- 2. Running total of salaries
+SELECT 
+    emp_name,
+    salary,
+    SUM(salary) OVER (ORDER BY emp_id ROWS UNBOUNDED PRECEDING) as running_total
+FROM employees
+ORDER BY emp_id;
+
+-- 3. Moving average of last 3 salaries
+SELECT 
+    emp_name,
+    salary,
+    AVG(salary) OVER (ORDER BY emp_id ROWS 2 PRECEDING) as moving_avg_3
+FROM employees
+ORDER BY emp_id;
+Common Table Expressions (CTEs)
+sql-- CTE Example 1: Department salary statistics
+WITH DeptStats AS (
+    SELECT 
+        department_id,
+        COUNT(*) as emp_count,
+        AVG(salary) as avg_salary,
+        MAX(salary) as max_salary,
+        MIN(salary) as min_salary
+    FROM employees
+    WHERE department_id IS NOT NULL
+    GROUP BY department_id
+)
+SELECT 
+    d.dept_name,
+    ds.emp_count,
+    ds.avg_salary,
+    ds.max_salary - ds.min_salary as salary_range
+FROM DeptStats ds
+JOIN departments d ON ds.department_id = d.dept_id
+ORDER BY ds.avg_salary DESC;
+
+-- CTE Example 2: Recursive CTE for hierarchical data
+WITH RECURSIVE EmployeeHierarchy AS (
+    -- Base case: Top-level managers
+    SELECT emp_id, emp_name, manager_id, 1 as level
+    FROM employees 
+    WHERE manager_id IS NULL
+    
+    UNION ALL
+    
+    -- Recursive case: Add subordinates
+    SELECT e.emp_id, e.emp_name, e.manager_id, eh.level + 1
+    FROM employees e
+    JOIN EmployeeHierarchy eh ON e.manager_id = eh.emp_id
+)
+SELECT * FROM EmployeeHierarchy ORDER BY level, emp_name;
+Advanced Subqueries
+sql-- Correlated subquery: Employees earning above department average
+SELECT emp_name, salary, department_id
+FROM employees e1
+WHERE salary > (
+    SELECT AVG(salary)
+    FROM employees e2
+    WHERE e2.department_id = e1.department_id
+);
+
+-- EXISTS subquery: Departments with high-budget projects
+SELECT d.dept_name
+FROM departments d
+WHERE EXISTS (
+    SELECT 1
+    FROM employees e
+    JOIN projects p ON e.emp_id = p.emp_id
+    WHERE e.department_id = d.dept_id
+    AND p.budget > 30000
+);
+Analytical Report Query
+sql-- Comprehensive analysis report
+WITH MonthlyMetrics AS (
+    SELECT 
+        d.dept_name,
+        COUNT(e.emp_id) as total_employees,
+        AVG(e.salary) as avg_salary,
+        SUM(p.budget) as total_project_budget,
+        COUNT(p.project_id) as active_projects
+    FROM departments d
+    LEFT JOIN employees e ON d.dept_id = e.department_id
+    LEFT JOIN projects p ON e.emp_id = p.emp_id
+    GROUP BY d.dept_name
+),
+CompanyTotals AS (
+    SELECT 
+        SUM(total_employees) as company_employees,
+        AVG(avg_salary) as company_avg_salary
+    FROM MonthlyMetrics
+)
+SELECT 
+    mm.dept_name,
+    mm.total_employees,
+    ROUND(mm.avg_salary, 2) as avg_salary,
+    ROUND((mm.avg_salary / ct.company_avg_salary * 100), 2) as salary_vs_company_avg,
+    mm.total_project_budget,
+    mm.active_projects,
+    CASE 
+        WHEN mm.avg_salary > ct.company_avg_salary THEN 'Above Average'
+        WHEN mm.avg_salary = ct.company_avg_salary THEN 'Average'
+        ELSE 'Below Average'
+    END as salary_category
+FROM MonthlyMetrics mm
+CROSS JOIN CompanyTotals ct
+ORDER BY mm.avg_salary DESC;
