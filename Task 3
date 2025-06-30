@@ -1,0 +1,117 @@
+Task 3: Database Migration (MySQL to PostgreSQL)
+Migration Process Steps
+Step 1: Schema Analysis and Conversion Script
+sql-- MySQL to PostgreSQL Migration Script
+
+-- 1. Data type conversions
+-- MySQL: TINYINT -> PostgreSQL: SMALLINT
+-- MySQL: MEDIUMINT -> PostgreSQL: INTEGER
+-- MySQL: BIGINT -> PostgreSQL: BIGINT
+-- MySQL: DECIMAL -> PostgreSQL: NUMERIC
+-- MySQL: DATETIME -> PostgreSQL: TIMESTAMP
+
+-- 2. Create PostgreSQL schema
+CREATE SCHEMA IF NOT EXISTS migrated_db;
+
+-- 3. Convert MySQL tables to PostgreSQL
+-- Original MySQL table:
+/*
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_active TINYINT(1) DEFAULT 1
+);
+*/
+
+-- PostgreSQL equivalent:
+CREATE TABLE migrated_db.users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- 4. Auto-increment conversion
+-- MySQL: AUTO_INCREMENT -> PostgreSQL: SERIAL or IDENTITY
+Step 2: Data Migration Script
+bash#!/bin/bash
+# Data migration script
+
+# Export data from MySQL
+mysqldump -h mysql_host -u username -p database_name \
+    --no-create-info --complete-insert --single-transaction \
+    > mysql_data.sql
+
+# Convert MySQL dump to PostgreSQL format
+sed -i 's/`//g' mysql_data.sql  # Remove backticks
+sed -i 's/\\0/\\\\0/g' mysql_data.sql  # Escape null bytes
+sed -i 's/\\"/""/g' mysql_data.sql  # Fix quote escaping
+
+# Import to PostgreSQL
+psql -h postgres_host -U postgres_user -d postgres_db -f mysql_data.sql
+Step 3: Data Integrity Verification
+sql-- Verification queries for data integrity
+
+-- 1. Row count comparison
+SELECT 'MySQL' as source, COUNT(*) as row_count FROM mysql_db.users
+UNION ALL
+SELECT 'PostgreSQL' as source, COUNT(*) as row_count FROM migrated_db.users;
+
+-- 2. Data integrity checks
+-- Check for NULL values in critical columns
+SELECT 
+    SUM(CASE WHEN username IS NULL THEN 1 ELSE 0 END) as null_usernames,
+    SUM(CASE WHEN email IS NULL THEN 1 ELSE 0 END) as null_emails
+FROM migrated_db.users;
+
+-- 3. Data type validation
+SELECT 
+    column_name,
+    data_type,
+    is_nullable,
+    column_default
+FROM information_schema.columns
+WHERE table_name = 'users' AND table_schema = 'migrated_db';
+
+-- 4. Foreign key constraint verification
+SELECT 
+    tc.constraint_name,
+    kcu.column_name,
+    ccu.table_name AS foreign_table_name,
+    ccu.column_name AS foreign_column_name
+FROM information_schema.table_constraints tc
+JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name
+WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = 'users';
+Step 4: Migration Summary Report
+sql-- Migration summary report
+WITH migration_summary AS (
+    SELECT 
+        'employees' as table_name,
+        COUNT(*) as record_count,
+        MIN(created_at) as earliest_record,
+        MAX(created_at) as latest_record
+    FROM migrated_db.employees
+    
+    UNION ALL
+    
+    SELECT 
+        'departments' as table_name,
+        COUNT(*) as record_count,
+        NULL as earliest_record,
+        NULL as latest_record
+    FROM migrated_db.departments
+)
+SELECT 
+    table_name,
+    record_count,
+    earliest_record,
+    latest_record,
+    CASE 
+        WHEN record_count > 0 THEN 'SUCCESS'
+        ELSE 'FAILED'
+    END as migration_status
+FROM migration_summary;
